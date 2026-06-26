@@ -14,16 +14,6 @@
  * limitations under the License.
  */
 
-#include <ATen/ATen.h>
-#include <torch/types.h>
-#include <ATen/cuda/CUDAContext.h>
-#include <c10/cuda/CUDAGuard.h>
-#include <cuda_runtime.h>
-
-#ifndef QUTLASS_DISABLE_PYBIND
-#include <torch/extension.h>
-#endif
-
 #include <iostream>
 
 #include "cutlass/cutlass.h"
@@ -76,13 +66,13 @@ struct GemmRunner {
   GemmRunner() { }
 
   bool run(
-    torch::Tensor &out,
-    torch::Tensor &out_sf,
-    torch::Tensor &out_mask,
-    torch::Tensor const&x,
-    torch::Tensor const&y,
+    torch::stable::Tensor &out,
+    torch::stable::Tensor &out_sf,
+    torch::stable::Tensor &out_mask,
+    torch::stable::Tensor const&x,
+    torch::stable::Tensor const&y,
     int32_t M, int32_t N, int32_t K,
-    torch::Device device)
+    torch::stable::Device device)
   {
 
     using GemmCoord = cutlass::gemm::GemmCoord;
@@ -101,8 +91,8 @@ struct GemmRunner {
         cutlass::bfloat16_t(0) //TODO (later): float
     };
 
-    const at::cuda::OptionalCUDAGuard device_guard(device_of(x));
-    cudaStream_t stream = at::cuda::getCurrentCUDAStream(device.index());
+    torch::stable::accelerator::DeviceGuard device_guard(x.get_device_index());
+    cudaStream_t stream = get_current_cuda_stream(x.get_device_index());
 
     CUTLASS_CHECK(gemmOp.initialize(arguments, nullptr, stream));
 
@@ -113,11 +103,11 @@ struct GemmRunner {
 
 };
 
-void fusedQuantizeMxQuestWithMask_host(torch::Tensor& D,
-                                       torch::Tensor& D_sf,
-                                       torch::Tensor& D_mask,
-                                       torch::Tensor const& A,
-                                       torch::Tensor const& B)
+void fusedQuantizeMxQuestWithMask_host(torch::stable::Tensor& D,
+                                       torch::stable::Tensor& D_sf,
+                                       torch::stable::Tensor& D_mask,
+                                       torch::stable::Tensor const& A,
+                                       torch::stable::Tensor const& B)
 {
   int32_t M = A.numel() / 32;
   int32_t N = B.size(1);

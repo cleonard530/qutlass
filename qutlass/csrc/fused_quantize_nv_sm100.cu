@@ -14,16 +14,6 @@
  * limitations under the License.
  */
 
-#include <ATen/ATen.h>
-#include <torch/types.h>
-#include <ATen/cuda/CUDAContext.h>
-#include <c10/cuda/CUDAGuard.h>
-#include <cuda_runtime.h>
-
-#ifndef QUTLASS_DISABLE_PYBIND
-#include <torch/extension.h>
-#endif
-
 #include "cutlass/cutlass.h"
 
 #include "cute/tensor.hpp"
@@ -128,11 +118,11 @@ constexpr bool IsBlockScaleSupported = FusionOp::IsBlockScaleSupported;
 using SfdOutputCfg = cutlass::detail::Sm1xxBlockScaledOutputConfig<OutputSFVectorSize>;
 using LayoutSFD = typename SfdOutputCfg::LayoutSF;
 
-typename Gemm::Arguments args_from_options_nv(torch::Tensor& D,
-                                           torch::Tensor& D_sf,
-                                           torch::Tensor const& A,
-                                           torch::Tensor const& B,
-                                           torch::Tensor const& global_scale,
+typename Gemm::Arguments args_from_options_nv(torch::stable::Tensor& D,
+                                           torch::stable::Tensor& D_sf,
+                                           torch::stable::Tensor const& A,
+                                           torch::stable::Tensor const& B,
+                                           torch::stable::Tensor const& global_scale,
                                            int32_t M, int32_t N, int32_t K)
 {
     using ElementA       = typename Gemm::ElementA;
@@ -172,13 +162,13 @@ typename Gemm::Arguments args_from_options_nv(torch::Tensor& D,
     return arguments;
 }
 
-void runGemmNv(torch::Tensor& D,
-             torch::Tensor& D_sf,
-             torch::Tensor const& A,
-             torch::Tensor const& B,
-             torch::Tensor const& global_scale,
+void runGemmNv(torch::stable::Tensor& D,
+             torch::stable::Tensor& D_sf,
+             torch::stable::Tensor const& A,
+             torch::stable::Tensor const& B,
+             torch::stable::Tensor const& global_scale,
              int32_t M, int32_t N, int32_t K,
-             torch::Device device)
+             torch::stable::Device device)
 {
     Gemm gemm;
 
@@ -189,8 +179,8 @@ void runGemmNv(torch::Tensor& D,
 
     cutlass::device_memory::allocation<uint8_t> workspace(workspace_size);
 
-    const at::cuda::OptionalCUDAGuard device_guard(device_of(A));
-    cudaStream_t stream = at::cuda::getCurrentCUDAStream(device.index());
+    torch::stable::accelerator::DeviceGuard device_guard(A.get_device_index());
+    cudaStream_t stream = get_current_cuda_stream(A.get_device_index());
 
     CUTLASS_CHECK(gemm.can_implement(arguments));
 
@@ -199,11 +189,11 @@ void runGemmNv(torch::Tensor& D,
     CUTLASS_CHECK(gemm.run(arguments, workspace.get(), stream));
 }
 
-void fusedQuantizeNvAbsMax_host_sm100(torch::Tensor& D,
-                                      torch::Tensor& D_sf,
-                                      torch::Tensor const& A,
-                                      torch::Tensor const& B,
-                                      torch::Tensor const& global_scale)
+void fusedQuantizeNvAbsMax_host_sm100(torch::stable::Tensor& D,
+                                      torch::stable::Tensor& D_sf,
+                                      torch::stable::Tensor const& A,
+                                      torch::stable::Tensor const& B,
+                                      torch::stable::Tensor const& global_scale)
 {
 #if TARGET_CUDA_ARCH == 100
     int32_t M = A.numel() / 128;
@@ -212,7 +202,7 @@ void fusedQuantizeNvAbsMax_host_sm100(torch::Tensor& D,
 
     runGemmNv(D, D_sf, A, B, global_scale, M, N, K, A.device());
 #else
-    TORCH_CHECK(false, "Unsupported CUDA arch");
+    STD_TORCH_CHECK(false, "Unsupported CUDA arch");
 #endif
 }
 

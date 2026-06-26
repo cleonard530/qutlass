@@ -1,6 +1,5 @@
 #pragma once
 
-#pragma once
 #include <iostream>
 #include <stdexcept>
 #include <cstdint>
@@ -8,29 +7,37 @@
 
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
-
-#include <cstdint>
 #include <cuda.h>
+
+#ifndef USE_CUDA
+#define USE_CUDA
+#endif
+
+#include <torch/csrc/inductor/aoti_torch/c/shim.h>
+#include <torch/csrc/stable/tensor.h>
+#include <torch/csrc/stable/ops.h>
+#include <torch/csrc/stable/accelerator.h>
+#include <torch/headeronly/util/Exception.h>
 
 #include "cutlass/cutlass.h"
 
-/**
- * Helper function for checking CUTLASS errors
- */
-#define CUTLASS_CHECK(status)                       \
-  {                                                 \
-    cutlass::Status error = status;                 \
-    TORCH_CHECK(error == cutlass::Status::kSuccess, \
-                cutlassGetStatusString(error));     \
+inline cudaStream_t get_current_cuda_stream(int device_index) {
+  void* stream_ptr = nullptr;
+  aoti_torch_get_current_cuda_stream(device_index, &stream_ptr);
+  return reinterpret_cast<cudaStream_t>(stream_ptr);
+}
+
+#define CUTLASS_CHECK(status)                              \
+  {                                                        \
+    cutlass::Status error = status;                        \
+    STD_TORCH_CHECK(error == cutlass::Status::kSuccess,    \
+                    cutlassGetStatusString(error));         \
   }
 
-/**
- * Panic wrapper for unwinding CUDA runtime errors
- */
-#define CUDA_CHECK(status)                                        \
-  {                                                               \
-    cudaError_t error = status;                                   \
-    TORCH_CHECK(error == cudaSuccess, cudaGetErrorString(error)); \
+#define CUDA_CHECK(status)                                           \
+  {                                                                  \
+    cudaError_t error = status;                                      \
+    STD_TORCH_CHECK(error == cudaSuccess, cudaGetErrorString(error)); \
   }
 
 inline int get_cuda_max_shared_memory_per_block_opt_in(int const device) {
@@ -42,13 +49,6 @@ inline int get_cuda_max_shared_memory_per_block_opt_in(int const device) {
 
 int32_t get_sm_version_num();
 
-/**
- * A wrapper for a kernel that is used to guard against compilation on
- * architectures that will never use the kernel. The purpose of this is to
- * reduce the size of the compiled binary.
- * __CUDA_ARCH__ is not defined in host code, so this lets us smuggle the ifdef
- * into code that will be executed on the device where it is defined.
- */
 template <typename Kernel>
 struct enable_sm90_or_later : Kernel {
   template <typename... Args>
