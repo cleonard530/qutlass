@@ -235,6 +235,7 @@ std::tuple<Tensor, Tensor> fusedQuantizeMxAbsMax(Tensor const& A,
         fusedQuantizeMxAbsMaxHad64_host(OUT, OUT_sf, A, B);
     } else if (HAD_GS == 128) {
 #if TARGET_CUDA_ARCH == 100
+        // FIXME: add input global_scale to interface for consistency
         auto global_scale =
             torch::stable::new_zeros(A, {1}, ScalarType::Float);
         fusedQuantizeMxAbsMax_host_sm100(OUT, OUT_sf, A, B, global_scale);
